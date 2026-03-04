@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Container Packing Optimizer — Technical Report</title>
+<style>
+  /* ── Print setup ── */
+  @page {
+    size: A4;
+    margin: 22mm 20mm 22mm 20mm;
+  }
+  @page :first { margin-top: 0; }
+
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Georgia", serif;
+    font-size: 10.5pt;
+    line-height: 1.65;
+    color: #1a1a2e;
+    background: white;
+  }
+  a { color: #2563EB; text-decoration: none; }
+
+  /* ── Cover page ── */
+  .cover {
+    height: 100vh;
+    min-height: 270mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40mm 20mm 20mm 20mm;
+    background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%);
+    color: white;
+    page-break-after: always;
+  }
+  .cover-rule { width: 60mm; height: 4px; background: #3B82F6; margin-bottom: 12mm; }
+  .cover h1 { font-family: "Arial", sans-serif; font-size: 28pt; font-weight: 700;
+              line-height: 1.2; margin-bottom: 6mm; }
+  .cover .subtitle { font-size: 13pt; color: #93C5FD; margin-bottom: 20mm; }
+  .cover .meta { font-size: 9.5pt; color: #94A3B8; line-height: 2; }
+
+  /* ── TOC page ── */
+  .toc-page { page-break-after: always; padding: 15mm 0 0 0; }
+  .toc-page h2 { font-family: "Arial", sans-serif; font-size: 15pt; color: #1e3a5f;
+                 border-bottom: 2px solid #2563EB; padding-bottom: 3mm; margin-bottom: 8mm; }
+  .toc-section { display: flex; justify-content: space-between;
+                 padding: 2.5mm 0; border-bottom: 1px dotted #CBD5E1; font-size: 10pt; }
+  .toc-section.main { font-weight: bold; color: #1e3a5f; margin-top: 3mm; }
+  .toc-section.sub { padding-left: 10mm; color: #475569; }
+
+  /* ── Chapter heading ── */
+  .chapter {
+    page-break-before: always;
+    padding-top: 10mm;
+  }
+  .chapter-rule { height: 4px; background: linear-gradient(90deg,#2563EB,#93C5FD); margin-bottom: 5mm; }
+  .chapter-num { font-family: "Arial", sans-serif; font-size: 9pt;
+                 color: #3B82F6; letter-spacing: 2px; text-transform: uppercase; }
+  .chapter h2 { font-family: "Arial", sans-serif; font-size: 17pt; color: #0f172a;
+                font-weight: 700; line-height: 1.2; margin-top: 1mm; margin-bottom: 5mm; }
+
+  /* ── Section headings ── */
+  h3 { font-family: "Arial", sans-serif; font-size: 11.5pt; color: #1e3a5f;
+       margin-top: 7mm; margin-bottom: 3mm; border-left: 3px solid #3B82F6; padding-left: 3mm; }
+  h4 { font-family: "Arial", sans-serif; font-size: 10pt; color: #334155;
+       margin-top: 5mm; margin-bottom: 2mm; }
+
+  /* ── Body text ── */
+  p { margin-bottom: 3.5mm; }
+  p + p { }
+
+  /* ── Lists ── */
+  ul, ol { margin-left: 5mm; margin-bottom: 4mm; }
+  li { margin-bottom: 1.5mm; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 9.5pt; }
+  thead tr { background: #1e3a5f; color: white; }
+  thead th { padding: 3mm 3mm; text-align: left; font-weight: 600; }
+  tbody tr:nth-child(even) { background: #F1F5F9; }
+  tbody td { padding: 2.5mm 3mm; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+  td code { background: #E2E8F0; border-radius: 2px; padding: 0 2px; font-size: 8.5pt; }
+
+  /* ── Code blocks ── */
+  pre {
+    background: #0f172a;
+    color: #E2E8F0;
+    padding: 4mm 5mm;
+    border-radius: 3px;
+    font-family: "Courier New", monospace;
+    font-size: 8.5pt;
+    line-height: 1.5;
+    margin: 4mm 0;
+    overflow: visible;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  code { font-family: "Courier New", monospace; font-size: 8.5pt; background: #EFF6FF; padding: 0 2px; border-radius: 2px; }
+
+  /* ── Callout boxes ── */
+  .callout { border-left: 4px solid #3B82F6; background: #EFF6FF;
+             padding: 3mm 4mm; margin: 4mm 0; font-size: 9.5pt; }
+  .callout.warn { border-color: #F59E0B; background: #FFFBEB; }
+  .callout.green { border-color: #22C55E; background: #F0FDF4; }
+  .callout strong { color: #1e3a5f; }
+
+  /* ── Step boxes ── */
+  .step-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin: 4mm 0; }
+  .step-box { background: #F8FAFC; border: 1px solid #CBD5E1; border-top: 3px solid #3B82F6;
+              padding: 3mm 4mm; border-radius: 2px; font-size: 9pt; }
+  .step-box .step-num { font-weight: bold; color: #2563EB; margin-bottom: 1mm; }
+
+  /* ── Appendix ── */
+  .appendix { page-break-before: always; }
+  .appendix .chapter-rule { background: linear-gradient(90deg,#22C55E,#86EFAC); }
+  .appendix .chapter-num { color: #16A34A; }
+  .appendix h2 { color: #0f172a; }
+  .appendix h3 { border-color: #22C55E; }
+
+  /* ── Footer ── */
+  .footer-note { margin-top: 20mm; font-size: 8pt; color: #94A3B8; text-align: center;
+                 border-top: 1px solid #E2E8F0; padding-top: 3mm; }
+
+  /* ── Diagram-style ascii boxes ── */
+  .flow { background: #F8FAFC; border: 1px solid #CBD5E1; padding: 4mm 6mm;
+          font-family: "Courier New", monospace; font-size: 8pt; margin: 4mm 0;
+          line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ COVER ═══ -->
+<div class="cover">
+  <div class="cover-rule"></div>
+  <h1>Container Packing<br>Optimizer</h1>
+  <div class="subtitle">Technical Reference &amp; User Manual</div>
+  <div class="meta">
+    Version 1.0 &nbsp;·&nbsp; March 2026<br>
+    Internal software documentation<br>
+    Constraint-based 3-D container loading engine
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ TOC ══════ -->
+<div class="toc-page">
+  <h2>Table of Contents</h2>
+
+  <div class="toc-section main"><span>1 &nbsp; Executive Summary</span><span>3</span></div>
+
+  <div class="toc-section main"><span>2 &nbsp; System &amp; Library Requirements</span><span>3</span></div>
+  <div class="toc-section sub"><span>2.1 &nbsp; Hardware &amp; Operating System</span><span>3</span></div>
+  <div class="toc-section sub"><span>2.2 &nbsp; Python &amp; Library Dependencies</span><span>3</span></div>
+
+  <div class="toc-section main"><span>3 &nbsp; Input File Specification</span><span>4</span></div>
+  <div class="toc-section sub"><span>3.1 &nbsp; File Format</span><span>4</span></div>
+  <div class="toc-section sub"><span>3.2 &nbsp; Pallet Rows — Required &amp; Optional Columns</span><span>4</span></div>
+  <div class="toc-section sub"><span>3.3 &nbsp; NP (Loose Box) Rows</span><span>5</span></div>
+  <div class="toc-section sub"><span>3.4 &nbsp; Dimension String Format</span><span>5</span></div>
+
+  <div class="toc-section main"><span>4 &nbsp; System Architecture</span><span>6</span></div>
+  <div class="toc-section sub"><span>4.1 &nbsp; File Structure</span><span>6</span></div>
+  <div class="toc-section sub"><span>4.2 &nbsp; Module Map</span><span>6</span></div>
+
+  <div class="toc-section main"><span>5 &nbsp; Full Pipeline — Step-by-Step Data Flow</span><span>7</span></div>
+
+  <div class="toc-section main"><span>6 &nbsp; Core Algorithms in Detail</span><span>8</span></div>
+  <div class="toc-section sub"><span>6.1 &nbsp; Excel Parsing</span><span>8</span></div>
+  <div class="toc-section sub"><span>6.2 &nbsp; Block Type Classification</span><span>8</span></div>
+  <div class="toc-section sub"><span>6.3 &nbsp; Constraint Programming Model</span><span>9</span></div>
+  <div class="toc-section sub"><span>6.4 &nbsp; NP Loose-Box Assignment</span><span>11</span></div>
+  <div class="toc-section sub"><span>6.5 &nbsp; Fill Recommendation Engine</span><span>11</span></div>
+
+  <div class="toc-section main"><span>7 &nbsp; Configuration Reference</span><span>12</span></div>
+
+  <div class="toc-section main"><span>8 &nbsp; Output Files</span><span>13</span></div>
+  <div class="toc-section sub"><span>8.1 &nbsp; report.xlsx</span><span>13</span></div>
+  <div class="toc-section sub"><span>8.2 &nbsp; JSON &amp; log files</span><span>13</span></div>
+
+  <div class="toc-section main"><span>9 &nbsp; Known Assumptions &amp; Limitations</span><span>14</span></div>
+
+  <div class="toc-section main"><span>Appendix A &nbsp; User Manual</span><span>15</span></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 1 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 1</div>
+  <h2>Executive Summary</h2>
+
+  <p>The <strong>Container Packing Optimizer</strong> is a desktop application that takes a merchandise order in Excel format and computes how to load the pallets and loose boxes into the fewest possible 40-foot high-cube shipping containers, maximising space utilisation. It then recommends which additional product lines to reorder to fill any remaining gaps.</p>
+
+  <h3>What the software does</h3>
+  <ul>
+    <li>Reads a standard order export from Excel (Edelman format or compatible layout).</li>
+    <li>Groups individual pallets of the same footprint and height into <em>row-blocks</em> — the physical unit that occupies one full row across the container width.</li>
+    <li>Solves a combinatorial optimisation problem (constraint programming) to decide which row-blocks go into each container and in what sequence, maximising pallet count and then length utilisation.</li>
+    <li>Fills remaining headroom above each pallet row and the tail zone after the last row with loose (NP) boxes, greedily using all six axis-aligned box orientations.</li>
+    <li>Recommends extra units to order from the same product range to fill leftover space.</li>
+    <li>Produces a formatted Excel report, JSON data files, a text summary, and (optionally) 3-D matplotlib visualisations.</li>
+  </ul>
+
+  <h3>What the software does not do</h3>
+  <ul>
+    <li>Does not perform true item-level 3-D bin packing — pallets are treated as full-width rows.</li>
+    <li>Does not optimise across containers simultaneously; each container is solved sequentially.</li>
+    <li>Does not handle non-rectangular or non-stackable items.</li>
+    <li>Does not integrate with any ERP or WMS system; all I/O is via Excel files.</li>
+  </ul>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 2 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 2</div>
+  <h2>System &amp; Library Requirements</h2>
+
+  <h3>2.1 Hardware &amp; Operating System</h3>
+  <table>
+    <thead><tr><th>Component</th><th>Minimum</th><th>Recommended</th></tr></thead>
+    <tbody>
+      <tr><td>CPU</td><td>Any modern x86-64</td><td>4+ cores (solver is single-threaded but Python is not)</td></tr>
+      <tr><td>RAM</td><td>4 GB</td><td>8 GB (large orders with 500+ pallets may need more)</td></tr>
+      <tr><td>Disk</td><td>2 GB free</td><td>4 GB (Python environment + OR-Tools binaries)</td></tr>
+      <tr><td>OS</td><td>Windows 10 64-bit, macOS 12+</td><td>Windows 11, macOS 14+</td></tr>
+      <tr><td>Display</td><td>1280 × 720</td><td>1920 × 1080 (GUI designed for 900 × 680 minimum)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 Python &amp; Library Dependencies</h3>
+  <p>Python <strong>3.10 or 3.11</strong> is required. Python 3.12 is not recommended — some OR-Tools wheel variants may not yet support it.</p>
+
+  <table>
+    <thead><tr><th>Library</th><th>Version (tested)</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>cpmpy</code></td><td>≥ 0.9.23</td><td>Constraint programming modelling layer</td></tr>
+      <tr><td><code>ortools</code></td><td>≥ 9.8</td><td>Google OR-Tools CP-SAT backend solver</td></tr>
+      <tr><td><code>pandas</code></td><td>≥ 2.0</td><td>Excel reading and DataFrame manipulation</td></tr>
+      <tr><td><code>openpyxl</code></td><td>≥ 3.1</td><td>Excel report writing (read_excel + Workbook)</td></tr>
+      <tr><td><code>matplotlib</code></td><td>≥ 3.8</td><td>Optional 3-D container visualisations</td></tr>
+      <tr><td><code>tkinter</code></td><td>built-in</td><td>Desktop GUI (bundled with Python on all platforms)</td></tr>
+    </tbody>
+  </table>
+
+  <p>Install all dependencies in one command from the project root:</p>
+  <pre>pip install -r requirements.txt</pre>
+
+  <div class="callout warn">
+    <strong>Important:</strong> Do <em>not</em> install <code>gurobipy</code> in the same environment. CPMpy silently attempts to import it at startup and will produce errors if it is installed without a valid Gurobi licence.
+  </div>
+
+  <p>For packaging into a standalone executable, <code>pyinstaller ≥ 6.0</code> is also required but only on the build machine — it is not shipped with the final application.</p>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 3 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 3</div>
+  <h2>Input File Specification</h2>
+
+  <h3>3.1 File Format</h3>
+  <p>The input must be a Microsoft Excel file (<code>.xlsx</code> or <code>.xls</code>). The sheet can be at any index (default: first sheet). The tool automatically scans for the header row — it looks for any row containing at least two of the following keywords: <em>Barcode, Pallet size, Pallet and packing size, Productname, Total order full pallets, Total number of pallets, Total pallet in container</em>. Rows above the detected header are ignored.</p>
+
+  <p>A single sheet must contain both pallet rows and NP (loose box) rows. The two row types are distinguished by the value in the <strong>Pallet size</strong> column: rows containing the string <code>NP</code> (case-insensitive) are treated as loose-box rows; all other non-empty rows are treated as pallet rows.</p>
+
+  <h3>3.2 Pallet Rows — Required &amp; Optional Columns</h3>
+
+  <table>
+    <thead><tr><th>Column group</th><th>Accepted column names (prefix-matched, case-insensitive)</th><th>Required?</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Dimension string</strong></td>
+        <td><code>Pallet and packing size</code><br><code>Pallet size</code><br><code>size</code></td>
+        <td>Yes</td>
+        <td>Must contain dimension string (see §3.4). "Pallet and packing size" takes priority.</td>
+      </tr>
+      <tr>
+        <td><strong>Quantity</strong></td>
+        <td><code>External Packaging Quantity</code><br><code>Total order full pallets</code><br><code>Total number of pallets</code><br><code>number of pallets</code><br><code>full pallets</code></td>
+        <td>Yes</td>
+        <td>Integer number of full pallets of this type. Rows with zero or missing quantity are skipped.</td>
+      </tr>
+      <tr>
+        <td><strong>Product name</strong></td>
+        <td><code>Productname</code><br><code>product name</code><br><code>product</code></td>
+        <td>No</td>
+        <td>Used as human-readable label in reports and legends.</td>
+      </tr>
+      <tr>
+        <td><strong>Item</strong></td>
+        <td><code>Item</code></td>
+        <td>No</td>
+        <td>Appended to label if present.</td>
+      </tr>
+      <tr>
+        <td><strong>Barcode / EAN</strong></td>
+        <td><code>Barcode</code><br><code>bar code</code><br><code>ean</code></td>
+        <td>No</td>
+        <td>Stored in metadata; shown in legend.</td>
+      </tr>
+      <tr>
+        <td><strong>Weight per pallet</strong></td>
+        <td><code>External Net weight</code><br><code>Net weight</code><br><code>Weight</code></td>
+        <td>No</td>
+        <td>Used for container weight constraint. Defaults to 0 if absent — weight limit will not be binding.</td>
+      </tr>
+      <tr>
+        <td><strong>FOB unit price</strong></td>
+        <td><code>Item price FOB</code><br><code>price fob</code><br><code>fob price</code><br><code>unit price</code></td>
+        <td>No</td>
+        <td>Used for <code>max_value</code> recommendation objective. Ignored otherwise.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 NP (Loose Box) Rows</h3>
+  <p>Any row where the <strong>Pallet size</strong> column equals exactly <code>NP</code> is treated as a loose box row. The dimension for NP rows is read from the <strong>Pallet and packing size</strong> column (not the Pallet size column, which just holds "NP"). Quantity for NP rows is resolved in this order:</p>
+  <ol>
+    <li><code>External Packaging Quantity</code></li>
+    <li><code>Total number of pallets</code> (used as box count in NP rows)</li>
+  </ol>
+  <p>Weight per box is read from the same weight columns as pallet rows. Product name, item, and barcode are resolved identically to pallet rows.</p>
+
+  <h3>3.4 Dimension String Format</h3>
+  <p>All dimensions are parsed from strings like:</p>
+  <pre>1.15x1.15x1.01          (metres, dot separator)
+1,15x1,15x1,01          (metres, comma separator — European format)
+1.15×1.15×1.01          (metres, unicode × separator)
+0.35x0.55x0.26          (NP box in metres)</pre>
+  <p>The parser multiplies by 100 and rounds to the nearest centimetre. The trailing <code>cm</code> suffix is stripped if present. The order of dimensions is <strong>Length × Width × Height</strong>.</p>
+
+  <div class="callout">
+    <strong>Example valid row (pallet):</strong> Pallet and packing size = <code>1.15x1.15x1.01</code> → parsed as L=115 cm, W=115 cm, H=101 cm.
+    <br><strong>Example NP box row:</strong> Pallet size = <code>NP</code>, Pallet and packing size = <code>0.35x0.55x0.26</code> → parsed as L=35 cm, W=55 cm, H=26 cm.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 4 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 4</div>
+  <h2>System Architecture</h2>
+
+  <h3>4.1 File Structure</h3>
+  <pre>Container_packing_optimizer/
+│
+├── app/
+│   ├── main.py                    ← Pipeline orchestrator (steps 1–10)
+│   ├── gui.py                     ← Tkinter desktop GUI
+│   ├── config.py                  ← Configuration loader (JSON + defaults)
+│   │
+│   ├── models/
+│   │   └── A_1D_multi_container_placement_chatGPT.py   ← CP model
+│   │
+│   └── utils/
+│       ├── parse_xlsx.py          ← Excel input parser
+│       ├── oneDbuildblocks.py     ← Pallet → row-block classification
+│       ├── recommend.py           ← Fill recommendation engine
+│       ├── export_excel.py        ← Excel report writer
+│       └── visualize_row_blocks.py ← matplotlib 3-D plots
+│
+├── optimizer_config.json          ← User-editable container config
+├── requirements.txt
+├── ContainerOptimizer.spec        ← PyInstaller build spec
+├── build_mac.sh
+└── build_windows.bat</pre>
+
+  <h3>4.2 Module Map</h3>
+  <p>Each module has a single, well-defined responsibility:</p>
+  <table>
+    <thead><tr><th>Module</th><th>Responsibility</th><th>Key public interface</th></tr></thead>
+    <tbody>
+      <tr><td><code>config.py</code></td><td>Load <code>optimizer_config.json</code>; expose constants; fall back to built-in defaults</td><td>Module-level constants; <code>_CONFIG_SOURCE</code>, <code>_USING_DEFAULTS</code></td></tr>
+      <tr><td><code>parse_xlsx.py</code></td><td>Read Excel; detect header row; parse pallet rows and NP rows; expand to per-pallet metadata</td><td><code>parse_pallet_excel_v3()</code>, <code>parse_np_boxes_excel_v3()</code></td></tr>
+      <tr><td><code>oneDbuildblocks.py</code></td><td>Snap raw dimensions to canonical footprints; assign height bands; chunk pallets into row-block instances</td><td><code>build_row_blocks_from_pallets()</code>, <code>build_block_type_table()</code></td></tr>
+      <tr><td><code>A_1D_multi_container_placement_chatGPT.py</code></td><td>Define and solve the CP model for one container; expose loaded block indices in order</td><td><code>RowBlock1DOrderModel</code> class</td></tr>
+      <tr><td><code>recommend.py</code></td><td>Greedy 2-D (Y × Z) fill of tail zone and atop zones with pallet blocks and NP boxes</td><td><code>recommend_fill_containers()</code>, <code>print_recommendations()</code></td></tr>
+      <tr><td><code>export_excel.py</code></td><td>Write 4-sheet openpyxl Excel report from solved container data</td><td><code>export_excel_report()</code></td></tr>
+      <tr><td><code>visualize_row_blocks.py</code></td><td>Render 3-D matplotlib plots of each container's pallet layout + boxes + recommendations</td><td><code>plot_all_row_block_containers_pallets()</code></td></tr>
+      <tr><td><code>main.py</code></td><td>Orchestrate all steps; handle CLI arguments; write output files</td><td><code>main()</code></td></tr>
+      <tr><td><code>gui.py</code></td><td>Tkinter desktop front-end; file picker; background run thread; real-time log</td><td><code>App</code> class, <code>run_gui()</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 5 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 5</div>
+  <h2>Full Pipeline — Step-by-Step Data Flow</h2>
+
+  <p>The pipeline is executed in <code>main.py</code> in ten sequential steps. Each step receives the output of the previous one.</p>
+
+  <div class="flow">Excel file
+    │
+    ▼
+[STEP 1]  parse_xlsx.py
+    │     Detect header row → parse pallet rows → expand to meta_per_pallet (one dict per physical pallet)
+    │     Parse NP rows → np_boxes list (one dict per box type)
+    ▼
+[STEP 2]  oneDbuildblocks.py
+    │     Snap each pallet to canonical footprint (115×115, 115×108, 115×77, 77×77)
+    │     Assign height band (&lt;66, 66–89, 89–130, &gt;130, 230 cm)
+    │     Chunk into row-block instances (groups of k pallets that form one full row)
+    │     Check all counts are exact multiples → if not, stop and report required additions
+    ▼
+[STEP 3–6]  CONTAINER SOLVE LOOP  (repeats until all blocks are placed)
+    │
+    │   [STEP 3]  Build arrays (lengths, heights, weights, values) from remaining blocks
+    │   [STEP 4]  RowBlock1DOrderModel (CP-SAT via CPMpy)
+    │             → which blocks go in, in what order (back→door)
+    │   [STEP 5]  Extract solution: block sequence, y-coordinates, leftover length
+    │   [STEP 6]  Remove used blocks from remaining list → loop for next container
+    ▼
+[STEP 7]  assign_boxes_to_containers()  (inside main.py)
+    │     Priority 1: fill headroom above each pallet row (atop zones)
+    │     Priority 2: fill tail zone after last pallet row
+    │     Greedy 6-orientation fit; mutates containers in-place
+    ▼
+[STEP 8]  recommend.py
+    │     For each container: greedy 2-D fill of tail and remaining atop zones
+    │     with row-blocks and NP boxes from same order
+    ▼
+[STEP 9]  Write outputs
+    │     containers.json, recommendations.json, summary.txt, run.log
+    ▼
+[STEP 10] export_excel.py
+    │     Write report.xlsx  (Overview / Container Details / Packing Layout / Recommendations)
+    ▼
+[STEP 11] visualize_row_blocks.py  (optional, disabled in GUI/frozen mode)
+          3-D matplotlib plots per container</div>
+
+  <h3>Data structures that flow between steps</h3>
+  <table>
+    <thead><tr><th>Object</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>meta_per_pallet</code></td><td><code>List[Dict]</code></td><td>One dict per physical pallet: pallet_id, label, L/W/H (cm), weight_kg, price_fob</td></tr>
+      <tr><td><code>np_boxes</code></td><td><code>List[Dict]</code></td><td>One dict per NP box type: label, L/W/H (cm), quantity, weight_kg</td></tr>
+      <tr><td><code>blocks</code></td><td><code>List[BlockInstance]</code></td><td>Row-block instances ready for the solver: block_id, key, length_cm, height_cm, weight_kg, value (pallet count), pallets list</td></tr>
+      <tr><td><code>containers</code></td><td><code>List[Dict]</code></td><td>Solved container results: rows list, used_length_cm, leftover_cm, loaded_value, loaded_weight, box_zones</td></tr>
+      <tr><td><code>recs</code></td><td><code>List[Dict]</code></td><td>Recommendation per container: tail_placements, atop_placements, total_pallets_to_add, leftover_before/after_cm</td></tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 6 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 6</div>
+  <h2>Core Algorithms in Detail</h2>
+
+  <h3>6.1 Excel Parsing (<code>parse_xlsx.py</code>)</h3>
+
+  <h4>Header detection</h4>
+  <p>The function <code>_detect_header_row()</code> reads the Excel file without a header, then scans each row for overlap with a set of eight known keyword markers. The first row containing at least two of these keywords is used as the header. This makes the parser robust to leading title rows or blank rows above the data table.</p>
+
+  <h4>Column resolution</h4>
+  <p>Column names are normalised (lowercased, whitespace collapsed) and matched by prefix. For each logical field, an ordered list of candidate names is tried in priority order. This handles spelling variations (e.g. <em>Productname</em> vs <em>Product name</em>) and column renames across different order export formats.</p>
+
+  <h4>Dimension parsing</h4>
+  <p>Dimension strings are parsed by <code>_parse_pallet_size_str()</code>: strip units, normalise decimal separators, split on <code>x</code>, <code>X</code>, or Unicode <code>×</code>, convert each part from metres to centimetres (multiply by 100, round to integer). The result is always an integer triple <code>(L_cm, W_cm, H_cm)</code>.</p>
+
+  <h4>NP row identification</h4>
+  <p>Rows are flagged as NP loose-box rows when the <code>Pallet size</code> type-code column equals exactly <code>NP</code> (after stripping and uppercasing). These rows are excluded from the pallet parsing path and processed separately by <code>parse_np_boxes_excel_v3()</code>.</p>
+
+  <h3>6.2 Block Type Classification (<code>oneDbuildblocks.py</code>)</h3>
+
+  <h4>Canonical footprint mapping</h4>
+  <p>Each pallet's raw (L, W) dimensions are snapped to the nearest of the three recognised side lengths: <strong>115 cm, 108 cm, 77 cm</strong>, with a tolerance of ±2 cm. If neither dimension maps to a recognised value, the pallet is rejected with a warning. The canonical footprint key is formed as <code>max(L,W) × min(L,W)</code> to ensure orientation-independence.</p>
+
+  <h4>Height band classification</h4>
+  <p>The pallet height is classified into one of five bands, which determine how many pallets can be stacked and therefore how many pallets constitute one row-block:</p>
+  <table>
+    <thead><tr><th>Band</th><th>Height range</th><th>Stacking rule</th></tr></thead>
+    <tbody>
+      <tr><td><code>&lt;66</code></td><td>h &lt; 66 cm</td><td>4 layers high</td></tr>
+      <tr><td><code>66–89</code></td><td>66 ≤ h ≤ 89 cm</td><td>3 layers high</td></tr>
+      <tr><td><code>89–130</code></td><td>89 &lt; h ≤ 130 cm</td><td>2 layers high</td></tr>
+      <tr><td><code>&gt;130</code></td><td>h &gt; 130 cm (and ≠ 230)</td><td>1 layer</td></tr>
+      <tr><td><code>230</code></td><td>h = 230 cm exactly</td><td>1 layer</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Block type table</h4>
+  <p>The combination of canonical footprint and height band maps to a pre-defined <code>BlockType</code> entry that specifies: pallets per block (k), stack count, conservative block height, and allowed row lengths (rotation variants). The complete table is:</p>
+
+  <table>
+    <thead><tr><th>Block key</th><th>Pallets/block (k)</th><th>Stacks</th><th>Block height (cm)</th><th>Row length options</th></tr></thead>
+    <tbody>
+      <tr><td><code>115x115|&lt;66</code></td><td>8</td><td>4</td><td>4 × tallest pallet</td><td>115 cm</td></tr>
+      <tr><td><code>115x115|66-89</code></td><td>6</td><td>3</td><td>3 × tallest pallet</td><td>115 cm</td></tr>
+      <tr><td><code>115x115|89-130</code></td><td>4</td><td>2</td><td>2 × tallest pallet</td><td>115 cm</td></tr>
+      <tr><td><code>115x115|230</code></td><td>2</td><td>1</td><td>230 cm</td><td>115 cm</td></tr>
+      <tr><td><code>115x108|&lt;66</code></td><td>8</td><td>4</td><td>4 × tallest pallet</td><td>115 cm or 108 cm</td></tr>
+      <tr><td><code>115x108|66-89</code></td><td>6</td><td>3</td><td>3 × tallest pallet</td><td>115 cm or 108 cm</td></tr>
+      <tr><td><code>115x108|89-130</code></td><td>4</td><td>2</td><td>2 × tallest pallet</td><td>115 cm or 108 cm</td></tr>
+      <tr><td><code>115x77|66-89</code></td><td>6</td><td>3</td><td>3 × tallest pallet</td><td>115 cm or 77 cm</td></tr>
+      <tr><td><code>115x77|89-130</code></td><td>4</td><td>2</td><td>2 × tallest pallet</td><td>115 cm or 77 cm</td></tr>
+      <tr><td><code>115x77|&gt;130</code></td><td>2</td><td>1</td><td>230 cm</td><td>115 cm or 77 cm</td></tr>
+      <tr><td><code>77x77|&lt;89</code></td><td>9</td><td>3</td><td>3 × tallest pallet</td><td>77 cm</td></tr>
+      <tr><td><code>77x77|89-130</code></td><td>6</td><td>2</td><td>2 × tallest pallet</td><td>77 cm</td></tr>
+    </tbody>
+  </table>
+
+  <p>Block height is computed at instance level as <em>stack_count × max(pallet heights in chunk)</em>, giving a conservative (worst-case) height for the container door constraint.</p>
+
+  <h4>Multiple requirement</h4>
+  <p>Before any block instances are created, the system checks that the pallet count for each block type is an exact multiple of k. If any type has a remainder, the pipeline halts and reports exactly how many additional pallets must be ordered per type to reach the next valid multiple. This is a hard requirement of the row-block model.</p>
+
+  <h4>Rotation variants</h4>
+  <p>For block types with non-square footprints (e.g. 115×108, 115×77), the algorithm creates two <code>BlockInstance</code> objects for each chunk — one with <code>length_cm = 115</code> and one with <code>length_cm = 77</code> (or 108). Both share the same <code>block_id</code>. The solver selects at most one variant per physical block via the no-duplicate constraint. After solving, the unused rotation variant is discarded.</p>
+
+  <h3>6.3 Constraint Programming Model (<code>A_1D_multi_container_placement_chatGPT.py</code>)</h3>
+
+  <p>The solver uses <strong>CPMpy</strong> (a Python modelling library) over the <strong>Google OR-Tools CP-SAT</strong> backend. The model is a <em>1-D order-based placement model</em> for a single container, called repeatedly in an outer loop until all blocks are placed.</p>
+
+  <h4>Variables</h4>
+  <table>
+    <thead><tr><th>Variable</th><th>Domain</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>slot[r]</code></td><td>0 … N (integer)</td><td>Block instance index at row position r. 0 = empty slot.</td></tr>
+      <tr><td><code>used[r]</code></td><td>{0, 1} (bool)</td><td>True iff slot[r] ≠ 0</td></tr>
+      <tr><td><code>rowsUsed</code></td><td>0 … R (integer)</td><td>Count of occupied row slots</td></tr>
+      <tr><td><code>gapCount</code></td><td>0 … R (integer)</td><td>Number of fork-lift gaps = max(0, rowsUsed−1)</td></tr>
+      <tr><td><code>usedLen</code></td><td>0 … L (integer)</td><td>Total occupied length including gaps</td></tr>
+      <tr><td><code>loadedWeight</code></td><td>0 … Wmax (integer)</td><td>Sum weight of loaded blocks</td></tr>
+      <tr><td><code>loadedValue</code></td><td>0 … ΣV (integer)</td><td>Sum pallet count of loaded blocks</td></tr>
+      <tr><td><code>load[i]</code></td><td>{0, 1} (bool)</td><td>True iff block i appears in any slot (for post-solve extraction)</td></tr>
+    </tbody>
+  </table>
+
+  <p>The number of row slots R (<code>Rmax</code>) is automatically computed as the tightest feasible upper bound: ⌊(L + gap) / (min_length + gap)⌋, capped at N (total number of blocks). A 0-indexed sentinel array is prepended to all block property arrays so that <code>slot[r] = 0</code> contributes 0 to all sums without branching.</p>
+
+  <h4>Constraints</h4>
+  <p>Ten constraint groups are enforced:</p>
+
+  <table>
+    <thead><tr><th>ID</th><th>Constraint</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>C0</td><td><code>used[r] ↔ (slot[r] ≠ 0)</code></td><td>Boolean equivalence for used flag</td></tr>
+      <tr><td>C1</td><td><code>slot[r] = 0 → slot[r+1] = 0</code></td><td>Contiguity: all used rows form a prefix (back → door)</td></tr>
+      <tr><td>C2</td><td><code>slot[r] ≠ 0 ∧ slot[s] ≠ 0 → slot[r] ≠ slot[s]</code> for all r &lt; s</td><td>Each block placed at most once</td></tr>
+      <tr><td>C3</td><td><code>rowsUsed = Σ used[r]</code></td><td>Count of occupied rows</td></tr>
+      <tr><td>C4</td><td><code>gapCount = max(0, rowsUsed − 1)</code></td><td>One fork-lift gap between each consecutive pair of rows</td></tr>
+      <tr><td>C5</td><td><code>usedLen = Σ len(slot[r]) + gap × gapCount ≤ L</code></td><td>Total length must fit in container</td></tr>
+      <tr><td>C6</td><td><code>loadedWeight = Σ weight(slot[r]) ≤ Wmax</code></td><td>Container maximum payload weight</td></tr>
+      <tr><td>C7</td><td><code>loadedValue = Σ value(slot[r])</code></td><td>Total pallet count (maximised in objective)</td></tr>
+      <tr><td>C8</td><td><code>height(slot[r]) ≥ height(slot[r+1])</code> for all r</td><td>Non-increasing heights back → door (stability &amp; visual)</td></tr>
+      <tr><td>C9</td><td>Last used row: <code>height(slot[r]) ≤ Hdoor</code></td><td>Tallest block at the door end must clear the door opening</td></tr>
+      <tr><td>C10</td><td><code>load[i] ↔ ∃r: slot[r] = i</code></td><td>Loads flag for post-solve extraction</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Objective</h4>
+  <p>The solver maximises a lexicographic combination encoded as a single integer:</p>
+  <pre>maximise  10⁶ × loadedValue  +  usedLen</pre>
+  <p>The factor of 10⁶ ensures that adding even one more pallet always dominates any increase in length utilisation. The length term acts as a tiebreaker that favours placing longer blocks. This means the solver always prioritises loading more pallets over leaving less empty space.</p>
+
+  <h4>Multi-container loop</h4>
+  <p>After each container is solved, all block instances that share a <code>block_id</code> with any loaded block are removed from the remaining list. The model is then rebuilt from scratch for the next container. This continues until the remaining list is empty.</p>
+
+  <div class="callout">
+    <strong>Time limit:</strong> The solver is given a wall-clock time limit per container (default 10 seconds, configurable). OR-Tools CP-SAT returns the best feasible solution found within that time. For typical orders (10–50 block types per container), the optimum is usually found in under 2 seconds.
+  </div>
+
+  <h3>6.4 NP Loose-Box Assignment (<code>main.py</code> — <code>assign_boxes_to_containers()</code>)</h3>
+
+  <p>After all containers are solved, a greedy algorithm assigns the NP boxes into the free spaces. A shared pool tracks remaining quantities.</p>
+
+  <p><strong>Priority 1 — Headroom zones (atop):</strong> For each pallet row in each container, the available headroom is <em>Hdoor − row_height</em>. The zone spans the full container width and the row's length along the container. The greedy fill tries all six axis-aligned orientations of each box type and selects the orientation that maximises the number of boxes fitting in that zone (geometric fit). Volume is tracked to limit subsequent box types.</p>
+
+  <p><strong>Priority 2 — Tail zone:</strong> After processing all rows, the remaining tail length (L − used_length) is filled with the same greedy algorithm using full container height as the zone height.</p>
+
+  <h3>6.5 Fill Recommendation Engine (<code>recommend.py</code>)</h3>
+
+  <p>The recommendation engine asks: <em>"If we added more units from the same order, which items would best fill the remaining free space in each container?"</em></p>
+
+  <h4>Candidate generation</h4>
+  <p>Only block types that already appear in the solved container are considered as pallet recommendations (ensuring supply chain alignment). NP box types from the original order are also considered for atop and tail zones.</p>
+
+  <h4>Scoring</h4>
+  <p>Candidates are scored and sorted by the configured primary objective:</p>
+  <table>
+    <thead><tr><th>Objective</th><th>Score formula</th><th>Intent</th></tr></thead>
+    <tbody>
+      <tr><td><code>min_leftover</code></td><td>length_cm</td><td>Longest block fills the most linear space (default)</td></tr>
+      <tr><td><code>min_pallets</code></td><td>length_cm / pallets_per_block</td><td>Maximum space per pallet ordered</td></tr>
+      <tr><td><code>max_weight</code></td><td>length × width × height (volume proxy)</td><td>Heaviest or densest blocks first</td></tr>
+      <tr><td><code>max_value</code></td><td>avg_FOB_per_pallet × pallets_per_block</td><td>Highest commercial value first</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Greedy 2-D fill</h4>
+  <p>The tail zone is a 1-D strip of remaining container length. Candidates are sorted by score, then placed greedily: the highest-scoring block that fits in the remaining length is placed, and the remaining length is decremented (including one fork-lift gap per new block). This repeats until nothing fits.</p>
+  <p>Atop zones are treated similarly but use a 2-D strategy layered in the height axis: each layer (of height equal to one box height) is filled 1-D across the zone length. No fork-lift gap is applied between boxes in atop zones (they are loose boxes, not fork-lifted pallet rows).</p>
+
+  <h4>Overlap prevention</h4>
+  <p>Before recommending additions to atop zones, the engine checks which row positions already have NP box zones placed by Step 7 (<code>atop_covered_y</code> set). It also checks whether a tail NP zone already exists (<code>tail_has_np</code>). Zones already occupied are skipped to prevent double-counting.</p>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 7 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 7</div>
+  <h2>Configuration Reference</h2>
+
+  <p>All tunable parameters are stored in <code>optimizer_config.json</code> placed next to the executable (or project root in development). If the file is absent, built-in defaults are used and a warning is printed at every run. The file is plain JSON and can be edited with any text editor.</p>
+
+  <pre>{
+  "CONTAINER_LENGTH_CM":           1203,
+  "CONTAINER_WIDTH_CM":            235,
+  "CONTAINER_HEIGHT_CM":           270,
+  "CONTAINER_DOOR_HEIGHT_CM":      250,
+  "CONTAINER_MAX_WEIGHT_KG":       18000,
+  "ROW_GAP_CM":                    5,
+  "SOLVER_TIME_LIMIT_SEC":         10,
+  "RECOMMEND_OBJECTIVE":           "min_leftover",
+  "RECOMMEND_SECONDARY_OBJECTIVE": "min_pallets"
+}</pre>
+
+  <table>
+    <thead><tr><th>Parameter</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>CONTAINER_LENGTH_CM</code></td><td>1203</td><td>Internal usable length of the container (back wall to door). Standard 40-ft HC = 1203 cm.</td></tr>
+      <tr><td><code>CONTAINER_WIDTH_CM</code></td><td>235</td><td>Internal usable width. Standard 40-ft HC = 235 cm.</td></tr>
+      <tr><td><code>CONTAINER_HEIGHT_CM</code></td><td>270</td><td>Internal usable height. Used for 3-D plots only; does not constrain packing.</td></tr>
+      <tr><td><code>CONTAINER_DOOR_HEIGHT_CM</code></td><td>250</td><td>Door opening height. The last row at the door end must be ≤ this height. Standard = 250 cm.</td></tr>
+      <tr><td><code>CONTAINER_MAX_WEIGHT_KG</code></td><td>18000</td><td>Maximum payload weight per container. If no pallet weights are in the Excel, this constraint is never binding.</td></tr>
+      <tr><td><code>ROW_GAP_CM</code></td><td>5</td><td>Fork-lift clearance gap between consecutive pallet row-blocks (cm). Added once between each pair of adjacent rows.</td></tr>
+      <tr><td><code>SOLVER_TIME_LIMIT_SEC</code></td><td>10</td><td>Maximum wall-clock time in seconds given to the CP-SAT solver per container. Increase for very large orders or complex block mixes.</td></tr>
+      <tr><td><code>RECOMMEND_OBJECTIVE</code></td><td><code>min_leftover</code></td><td>Primary objective for the recommendation engine. Options: <code>min_leftover</code>, <code>min_pallets</code>, <code>max_weight</code>, <code>max_value</code>.</td></tr>
+      <tr><td><code>RECOMMEND_SECONDARY_OBJECTIVE</code></td><td><code>min_pallets</code></td><td>Tiebreaker objective when two candidates have equal primary scores.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <strong>Hardcoded parameters (require code changes):</strong><br>
+    Recognised pallet footprint side lengths: 115, 108, 77 cm (±2 cm tolerance).<br>
+    Height band boundaries: 66, 89, 130, 230 cm.<br>
+    Stacking rules per band (pallets per block, stack count) — see §6.2 table.<br>
+    These are domain-specific constants that reflect the physical pallet standards in use. They can be changed in <code>oneDbuildblocks.py → build_block_type_table()</code>.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 8 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 8</div>
+  <h2>Output Files</h2>
+
+  <p>All output files are written to an <code>outputs/</code> subfolder next to the Excel input file (or next to the executable when running frozen).</p>
+
+  <h3>8.1 report.xlsx</h3>
+  <p>The main deliverable. Four worksheets:</p>
+
+  <table>
+    <thead><tr><th>Sheet</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Overview</strong></td><td>Key metrics (containers used, total pallets, NP boxes, weight, average volumetric fill). Per-container summary table with traffic-light volumetric fill % (green ≥85%, amber ≥60%, red &lt;60%). Bar chart of fill % per container.</td></tr>
+      <tr><td><strong>Container Details</strong></td><td>Full row-by-row breakdown for every container: each pallet row-block (type, length, height, weight, pallet count, position) and each NP box zone (zone type, box label, dimensions, quantity).</td></tr>
+      <tr><td><strong>Packing Layout</strong></td><td>Colour-coded cell grid. Each spreadsheet column ≈ 12 cm of container length. Rows represent layers: pallets on top, NP box zones, then recommendation additions (+). Colours identify footprint type.</td></tr>
+      <tr><td><strong>Recommendations</strong></td><td>Per-container list of items to add (pallet blocks and NP boxes) showing zone (TAIL / ATOP), length, height, count, total units, and estimated FOB value where available.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Volumetric fill %</h4>
+  <p>The fill percentage shown throughout the report is <strong>volumetric</strong>, not length-based. It is computed as:</p>
+  <pre>vol_fill % = ( Σ[row.length × W × row.height]  +  Σ[NP box zone volume] )
+              ─────────────────────────────────────────────────────────────  × 100
+                         Container_L × Container_W × Door_H</pre>
+  <p>This correctly penalises containers loaded with a single thin layer of short pallets, unlike a length-only metric that would show such a container as nearly full.</p>
+
+  <h3>8.2 JSON and Log Files</h3>
+
+  <table>
+    <thead><tr><th>File</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>containers.json</code></td><td>Complete solved container data in machine-readable form. Contains every row-block position, all box zones, weights, and pallet metadata. Useful for integration with other systems.</td></tr>
+      <tr><td><code>recommendations.json</code></td><td>Recommendation results: per-container tail and atop placements, aggregated counts, estimated FOB values.</td></tr>
+      <tr><td><code>summary.txt</code></td><td>Human-readable one-page summary: number of containers, total pallets, total weight, per-container used length and leftover.</td></tr>
+      <tr><td><code>run.log</code></td><td>Timestamped log of every step, assumption, and warning printed during the run. Useful for auditing and debugging.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ CHAPTER 9 ════════════ -->
+<div class="chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Chapter 9</div>
+  <h2>Known Assumptions &amp; Limitations</h2>
+
+  <p>Every assumption the system makes is printed to the log at the start of each run. The most important ones are summarised here.</p>
+
+  <h3>Geometric assumptions</h3>
+  <ul>
+    <li><strong>Pallets occupy the full container width.</strong> A row-block is modelled as a rectangular slab of width = container width (235 cm). The model does not consider partial-width rows or pallets placed lengthwise.</li>
+    <li><strong>All pallets within a row are identical in footprint and height.</strong> The row-block model requires pallets to be grouped by type. Mixed-type rows are not supported.</li>
+    <li><strong>Container dimensions are interior clearances.</strong> Any structural members, lashing rails, or wall thickness must be accounted for when setting the config values.</li>
+    <li><strong>Pallet heights are the loaded height</strong> (pallet + stacked goods). The reported block height uses the tallest pallet in each chunk as the conservative bound.</li>
+  </ul>
+
+  <h3>Solver assumptions</h3>
+  <ul>
+    <li><strong>Sequential container packing.</strong> Containers are solved one at a time in order. The optimal global solution (all containers simultaneously) is not computed. For most order sizes this gives results very close to optimal.</li>
+    <li><strong>Height ordering back → door is enforced.</strong> The tallest rows go to the back of the container, the shortest (under door height) are at the door. This is a physical loading constraint.</li>
+    <li><strong>Time-limited solve.</strong> With the default 10-second limit, the solver may not reach a proven optimum for very large instances. The best feasible solution found within the time limit is used.</li>
+  </ul>
+
+  <h3>Recommendation limitations</h3>
+  <ul>
+    <li>Recommendations only suggest items already in the current order. No new product types are introduced.</li>
+    <li>The greedy algorithm is not globally optimal — it picks the locally best fit at each step.</li>
+    <li>NP box recommendations do not account for box fragility or stacking weight limits.</li>
+  </ul>
+
+  <h3>Input limitations</h3>
+  <ul>
+    <li>All pallet counts must be exact multiples of the pallets-per-block value for their type. The system will halt and report required additions if this condition is not met.</li>
+    <li>Only the footprint sizes 115, 108, and 77 cm (±2 cm) are recognised. Pallets outside this range are silently skipped.</li>
+    <li>Weight data is optional but if absent the weight constraint is never binding, which may lead to overloaded containers in edge cases.</li>
+  </ul>
+</div>
+
+
+<!-- ════════════════════════════════════════════ APPENDIX A ══════════════ -->
+<div class="appendix chapter">
+  <div class="chapter-rule"></div>
+  <div class="chapter-num">Appendix A</div>
+  <h2>User Manual</h2>
+
+  <div class="callout green">
+    <strong>You do not need to understand any of the technical content in this document to use the software.</strong> This appendix is the only section you need to read.
+  </div>
+
+  <h3>What does this tool do?</h3>
+  <p>You give it your order Excel file. It tells you how many shipping containers you need, exactly how to pack them, and what extra items you can add to fill the remaining space. It also generates a colour-coded Excel report you can share with your logistics team.</p>
+
+  <h3>Step 1 — Prepare your Excel file</h3>
+  <p>The tool reads your standard order export. Make sure it has these columns (the exact names do not need to match perfectly — the tool tries several common variations):</p>
+
+  <ul>
+    <li><strong>Pallet and packing size</strong> — the physical dimensions of each pallet, e.g. <code>1.15x1.15x1.01</code> (length × width × height in metres).</li>
+    <li><strong>External Packaging Quantity</strong> (or <em>Total order full pallets</em>) — how many full pallets of that product you have ordered.</li>
+  </ul>
+
+  <p>Optionally, also include:</p>
+  <ul>
+    <li><strong>Productname</strong> — shown in the report as human-readable labels.</li>
+    <li><strong>External Net weight</strong> — weight per pallet in kg, used to check the container does not exceed its weight limit.</li>
+    <li>For loose boxes (not palletised), mark the row with <code>NP</code> in the <strong>Pallet size</strong> column and put the box dimensions in <strong>Pallet and packing size</strong>.</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>Important:</strong> The total number of pallets for each product must be a multiple of a specific number (depending on pallet size — usually 2, 4, 6, 8, or 9). If it is not, the tool will stop and tell you exactly how many more pallets to add. This is a physical requirement of the packing method, not a software limitation.
+  </div>
+
+  <h3>Step 2 — Open the application</h3>
+
+  <p><strong>Windows:</strong> Double-click <code>ContainerOptimizer.exe</code> in the application folder.
+  <br><strong>Mac:</strong> Double-click <code>ContainerOptimizer.app</code>.
+  <br><strong>From Python:</strong> Run <code>python app/gui.py</code> in a terminal.</p>
+
+  <p>The application window opens. It looks like this:</p>
+  <pre style="font-size:8pt; line-height:1.4">
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Container Packing Optimizer                    Config: ...  │
+  ├─────────────────────────────────────────────────────────────┤
+  │ Excel Input File                          [Browse...]       │
+  │ No file selected                                            │
+  ├─────────────────────────────────────────────────────────────┤
+  │ [Run Optimizer]  ████████▒▒▒▒  Status: Ready               │
+  ├─────────────────────────────────────────────────────────────┤
+  │ Run Log                                                     │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │                                                         ││
+  │ └─────────────────────────────────────────────────────────┘│
+  ├─────────────────────────────────────────────────────────────┤
+  │ [Open Report (Excel)]  [Open Output Folder]                 │
+  └─────────────────────────────────────────────────────────────┘</pre>
+
+  <h3>Step 3 — Select your file</h3>
+  <p>Click <strong>Browse…</strong>. A file picker opens. Navigate to your order Excel file and click Open. The file path will appear under the button.</p>
+
+  <h3>Step 4 — Run the optimizer</h3>
+  <p>Click <strong>Run Optimizer</strong>. The progress bar starts moving and the Run Log area fills with live output. Depending on the size of your order, this takes between 10 seconds and a few minutes. Do not close the window.</p>
+
+  <p>You will see messages like:</p>
+  <pre>Parsed 340 physical pallets
+Constructed 42 row-block VARIANTS
+--- Solving container 1 ---
+Loaded blocks: 12  |  Used: 1198 / 1203 cm
+--- Solving container 2 ---
+...</pre>
+
+  <h3>Step 5 — Check the result</h3>
+  <p>When the log ends with <em>"Done! Outputs saved to: …"</em>, click <strong>Open Report (Excel)</strong>. Your report opens in Microsoft Excel with four sheets:</p>
+
+  <table>
+    <thead><tr><th>Sheet</th><th>What to look at</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Overview</strong></td><td>At a glance: how many containers, total pallets, average fill %, and the bar chart. Green = well-packed, amber = OK, red = significant space wasted.</td></tr>
+      <tr><td><strong>Container Details</strong></td><td>Exactly which pallet types go in which container and where. Share with the warehouse team for loading instructions.</td></tr>
+      <tr><td><strong>Packing Layout</strong></td><td>Visual colour-coded map of each container. Each coloured cell block is one pallet row. Green cells show recommended additions.</td></tr>
+      <tr><td><strong>Recommendations</strong></td><td>If any container has free space, this lists the exact items you should add to the order to fill it. Includes how many units and which zone they go in.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Step 6 — Review recommendations (optional)</h3>
+  <p>The last container is often partially empty. Check the <strong>Recommendations</strong> sheet — if the suggested additions make commercial sense, you can increase those line items in your order and re-run the tool to confirm they fit.</p>
+
+  <h3>Changing the container size or solver settings</h3>
+  <p>Open <code>optimizer_config.json</code> (it is in the same folder as the application) with Notepad or any text editor. Change the values and save. The next run will use the new settings. The top of the Run Log always shows which settings are active.</p>
+
+  <p>The most commonly changed settings are:</p>
+  <ul>
+    <li><code>CONTAINER_LENGTH_CM</code> — if you are using a different container size (e.g. 20-ft = 590 cm).</li>
+    <li><code>CONTAINER_MAX_WEIGHT_KG</code> — if your carrier has a lower payload limit.</li>
+    <li><code>SOLVER_TIME_LIMIT_SEC</code> — increase to 30 or 60 for very large orders if the result looks suboptimal.</li>
+  </ul>
+
+  <h3>Troubleshooting</h3>
+  <table>
+    <thead><tr><th>Problem</th><th>Likely cause &amp; fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Tool stops with <em>"ORDER NOT VALID FOR FULL ROW-BLOCK MODEL"</em></td>
+        <td>Pallet counts are not exact multiples. The log will say e.g. <em>"115x115|89-130: add 2 pallets"</em>. Add that many pallets to the order for that product and re-run.</td>
+      </tr>
+      <tr>
+        <td>No NP boxes appear in the output</td>
+        <td>Check that the <strong>Pallet size</strong> column (not Pallet and packing size) contains exactly <code>NP</code> for those rows, and that the quantity column is filled in.</td>
+      </tr>
+      <tr>
+        <td>Container 9 (or last container) is mostly empty</td>
+        <td>This is normal — the last container holds whatever pallets did not fit in the previous ones. Use the Recommendations sheet to see what to add to fill it.</td>
+      </tr>
+      <tr>
+        <td>Report not opening</td>
+        <td>Click <strong>Open Output Folder</strong> and find <code>report.xlsx</code> manually. Open it with Excel. If it does not exist, check the Run Log for any error in red.</td>
+      </tr>
+      <tr>
+        <td>Application closes immediately on double-click (Windows)</td>
+        <td>Windows Defender may have quarantined the executable. Right-click → Properties → Unblock, or add the folder to antivirus exclusions.</td>
+      </tr>
+      <tr>
+        <td>Very slow on large orders</td>
+        <td>Increase <code>SOLVER_TIME_LIMIT_SEC</code> is not the issue here — the solver is fast. Slowness usually comes from 3-D plotting if running from Python. Use the GUI (<code>gui.py</code>) which disables plots automatically.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer-note">
+    Container Packing Optimizer — Technical Reference &amp; User Manual — v1.0 — March 2026
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+outputs/
+*.log
+build/
+dist/
+*.spec
+.env
+.venv/
+cpmpy-env/

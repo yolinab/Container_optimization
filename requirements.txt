@@ -1,0 +1,5 @@
+cpmpy
+ortools==9.7.2996
+pandas
+matplotlib
+openpyxl
